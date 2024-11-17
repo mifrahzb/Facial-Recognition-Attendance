@@ -10,18 +10,18 @@ db = Database(db_name="student_attendance", user="postgres", password="arslanbtw
 db.create_table()
 
 # Example: Insert student data
-name = "Arslan"
-student_id = "CS1234"
+name = "abraiz"
+student_id = "CS1236"
 gender = "Male"
 department = "Computer Science"
-image_path = "./arslan.png"
+image_path = "./images/abraiz.png"
 
 # Preprocess the image and generate embedding
 image = cv2.imread(image_path)
 if image is None:
     raise FileNotFoundError(f"Image not found at path: {image_path}")
 preprocessed_face = preprocessing.process_image(image)
-embedding = ToEmbeddings.get_face_embedding(preprocessed_face)
+embedding   = ToEmbeddings.get_face_embedding(preprocessed_face)
 
 # Read the image file as binary
 with open(image_path, "rb") as file:

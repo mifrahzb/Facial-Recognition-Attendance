@@ -1,7 +1,10 @@
 import cv2
 import time
+import numpy as np
 import preprocessing  # Import the preprocessing module
 import ToEmbeddings  # Import the embeddings module
+from database import Database
+from cosine_similarity import match_embedding
 
 # Load the pre-trained DNN model for face detection
 model = cv2.dnn.readNetFromCaffe(
@@ -11,6 +14,17 @@ model = cv2.dnn.readNetFromCaffe(
 
 # Initialize webcam capture
 cap = cv2.VideoCapture(1)
+
+# Database connection
+db = Database(db_name="student_attendance", user="postgres", password="arslanbtw123")
+db.create_table()  # Ensure table exists
+
+# Fetch stored embeddings from the database
+db.cursor.execute("SELECT id, name, embedding FROM students")
+stored_data = db.cursor.fetchall()
+stored_embeddings = [np.array(record[2]) for record in stored_data]  # Convert embeddings to numpy arrays
+student_ids = [record[0] for record in stored_data]
+student_names = [record[1] for record in stored_data]
 
 # Buffer time setup
 last_capture_time = time.time()
@@ -53,8 +67,18 @@ while True:
         if (x1 - x) > 0 and (y1 - y) > 0:
             cropped_face = frame[y:y1, x:x1]  # Crop face
             preprocessed_face = preprocessing.process_image(cropped_face)  # Preprocess the cropped face
-            embedding = ToEmbeddings.get_face_embedding(preprocessed_face)  # Generate embedding
-            print("Embedding generated for one face:", embedding)
+            new_embedding = ToEmbeddings.get_face_embedding(preprocessed_face)  # Generate embedding
+            # print("Embedding generated for one face:", new_embedding)
+            
+            # Match embedding with stored embeddings
+            matches = match_embedding(new_embedding, stored_embeddings, threshold=0.8)
+
+            if matches:
+                for idx, similarity in matches:
+                    print(f"Match found: Student ID: {student_ids[idx]}, Name: {student_names[idx]}, Similarity: {similarity:.2f}")
+            else:
+                print("No match found for this face.")
+
 
     # Show the frame with bounding boxes
     for (x, y, x1, y1) in face_boxes:
