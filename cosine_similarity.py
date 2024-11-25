@@ -19,7 +19,7 @@ def cosine_similarity(vec1, vec2):
         return 0
     return dot_product / (norm_vec1 * norm_vec2)
 
-def match_embedding(new_embedding, db_embeddings, threshold=0.8):
+def match_embedding(new_embedding, db_embeddings, threshold=0.9):
     """
     Compare the new embedding against database embeddings using cosine similarity.
 

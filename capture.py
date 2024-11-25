@@ -13,7 +13,7 @@ model = cv2.dnn.readNetFromCaffe(
 )
 
 # Initialize webcam capture
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 
 # Database connection
 db = Database(db_name="student_attendance", user="postgres", password="arslanbtw123")
@@ -37,6 +37,7 @@ while True:
         break
 
     # Prepare the frame for the model
+    # Increase scale factor for better distant face detection
     blob = cv2.dnn.blobFromImage(frame, 1.0, (300, 300), (104.0, 177.0, 123.0))  # Larger input size
     model.setInput(blob)
     detections = model.forward()
@@ -44,6 +45,7 @@ while True:
     # Quality check variables
     frame_height, frame_width = frame.shape[:2]
     face_boxes = []
+    face_center = None  # Variable to track the center of the face
 
     for i in range(detections.shape[2]):
         confidence = detections[0, 0, i, 2]
@@ -53,13 +55,22 @@ while True:
             # Get the bounding box coordinates
             box = detections[0, 0, i, 3:7] * [frame_width, frame_height, frame_width, frame_height]
             (x, y, x1, y1) = box.astype("int")
+            # Increase the top and bottom boundaries to include more forehead and chin
+            # Extend boundaries to include more forehead, chin, and sides of the face
+            y = max(0, y - 20)  # Extend 20 pixels upwards for forehead
+            y1 = min(frame_height, y1 + 20)  # Extend 20 pixels downwards for chin
+            x = max(0, x - 20)  # Extend 20 pixels left for more of the face
+            x1 = min(frame_width, x1 + 20)  # Extend 20 pixels right for more of the face
 
             # Calculate the area of the detected face
             face_area = (x1 - x) * (y1 - y)
 
-            # Quality check: Ensure the face is sufficiently large
-            if face_area > 0.1 * frame_width * frame_height:  # Ensure the face covers at least 10% of the frame
+            # Quality check: Ensure the face is sufficiently large (lower the threshold for smaller faces)
+            if face_area > 0.05 * frame_width * frame_height:  # Reduced face area threshold to 5%
                 face_boxes.append((x, y, x1, y1))
+
+                # Track face center for centering check
+                face_center = ((x + x1) // 2, (y + y1) // 2)
 
     # Process and crop each face
     for (x, y, x1, y1) in face_boxes:
@@ -68,10 +79,9 @@ while True:
             cropped_face = frame[y:y1, x:x1]  # Crop face
             preprocessed_face = preprocessing.process_image(cropped_face)  # Preprocess the cropped face
             new_embedding = ToEmbeddings.get_face_embedding(preprocessed_face)  # Generate embedding
-            # print("Embedding generated for one face:", new_embedding)
-            
+
             # Match embedding with stored embeddings
-            matches = match_embedding(new_embedding, stored_embeddings, threshold=0.8)
+            matches = match_embedding(new_embedding, stored_embeddings, threshold=0.89)
 
             if matches:
                 for idx, similarity in matches:
@@ -79,6 +89,21 @@ while True:
             else:
                 print("No match found for this face.")
 
+    # Check if the face is mostly centered (within a region around the center of the frame)
+    if face_center:
+        frame_center = (frame_width // 2, frame_height // 2)
+        distance_from_center = np.linalg.norm(np.array(face_center) - np.array(frame_center))
+
+        # Set a threshold for how far from the center the face can be
+        if distance_from_center < frame_width * 0.2:  # Face should be within 20% of the frame width from the center
+            # Capture image if the face is centered and not too close
+            if time.time() - last_capture_time > buffer_time:
+                last_capture_time = time.time()
+                print("Capturing image for attendance...")
+        else:
+            print("Face not centered enough.")
+    else:
+        print("No face detected.")
 
     # Show the frame with bounding boxes
     for (x, y, x1, y1) in face_boxes:
